@@ -227,7 +227,7 @@ class Pallazzio_WPGHU {
 		$zip->close();
 
 		$options[ 'package' ] = get_template_directory_uri() . '/' . $this->github_repo . '.zip';
-		die();
+		//die();
 		return $options;
 	}
 

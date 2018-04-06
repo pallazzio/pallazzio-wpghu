@@ -1,16 +1,16 @@
 <?php
 /**
- * Allows WordPress plugins and themes hosted on GitHub to be updated automatically
+ * Allows WordPress plugins and themes hosted on GitHub to be updated automatically.
  *
- * @link https://github.com/pallazzio/pallazzio-wordpress-github-updater/
+ * @link https://github.com/pallazzio/pallazzio-wpghu/
  */
 
 // if this file is called directly, abort
-if ( ! defined( 'WPINC' ) ) die;
+if ( ! defined( 'WPINC' ) ) die();
 
-if ( ! class_exists( 'Pallazzio_WordPress_GitHub_Updater' ) ) :
+if ( ! class_exists( 'Pallazzio_WPGHU' ) ) :
 
-class Pallazzio_WordPress_GitHub_Updater {
+class Pallazzio_WPGHU {
 	private $is_theme        = null; // bool
 	private $github_user     = null; // string e.g. 'pallazzio'
 	private $github_repo     = null; // string e.g. 'item-dir'
@@ -46,10 +46,10 @@ class Pallazzio_WordPress_GitHub_Updater {
 			add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'modify_transient' ), 10, 1 );
 			add_filter( 'plugins_api',                           array( $this, 'item_info' ),        10, 3 );
 			add_filter( 'upgrader_pre_install',                  array( $this, 'pre_install'  ),     10, 2 );
-			//add_filter( 'upgrader_post_install',                 array( $this, 'post_install' ),     10, 3 );
 		}
 
-		add_filter( 'upgrader_package_options',              array( $this, 'modify_package' ),   10, 1 );
+		add_filter( 'upgrader_package_options', array( $this, 'modify_package' ), 10, 1 );
+		add_filter( 'upgrader_post_install',    array( $this, 'post_install' ),   10, 3 );
 	}
 
 	/**
@@ -101,14 +101,14 @@ class Pallazzio_WordPress_GitHub_Updater {
 			return $transient;
 		}
 
-		$last_github_call_time = get_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WordPress_GitHub_Updater_Time' );
+		$last_github_call_time = get_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WPGHU_Time' );
 
 		if ( $last_github_call_time && time() - $last_github_call_time < /*60 * 60 * */6 ) { // don't query github more than once every six hours
 
-			if ( ! empty( get_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WordPress_GitHub_Updater' ) ) ) {
+			if ( ! empty( get_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WPGHU' ) ) ) {
 
 				// use the stored info rather than querying GitHub
-				$stored = get_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WordPress_GitHub_Updater' );
+				$stored = get_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WPGHU' );
 				if ( $this->is_theme ) {
 					$transient->response[ $this->github_repo ] = json_decode( $stored, true );
 				} else {
@@ -127,13 +127,13 @@ class Pallazzio_WordPress_GitHub_Updater {
 			$this->item_data       = $this->is_theme ? wp_get_theme( $this->github_repo ) : get_plugin_data( $this->item_file );
 			$this->github_response = empty( $this->github_response ) ? $this->github_api_fetch( $this->github_user, $this->github_repo, $this->access_token ) : null;
 
-			update_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WordPress_GitHub_Updater_Time', time() );
+			update_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WPGHU_Time', time() );
 
 			$version = $this->is_theme ? $this->item_data->get( 'Version' ) : $this->item_data[ 'Version' ];
 			if ( 1 !== version_compare( $this->github_response->tag_name, $version ) ) {
 
 				// clear stored info because it may still contain the old version
-				update_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WordPress_GitHub_Updater', '' );
+				update_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WPGHU', '' );
 				return $transient;
 
 			}
@@ -158,7 +158,7 @@ class Pallazzio_WordPress_GitHub_Updater {
 			}
 
 			// store this transient object locally so it can be used again without querying GitHub
-			update_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WordPress_GitHub_Updater', wp_json_encode( $t ) );
+			update_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WPGHU', wp_json_encode( $t ) );
 
 		}
 
@@ -173,31 +173,6 @@ class Pallazzio_WordPress_GitHub_Updater {
 	public function pre_install( $true, $args ) {
 		$this->item_active = is_plugin_active( $this->item );
 	}
-
-	/**
-	 * Modifies the internal location pointer and moves the files from the GitHub dir name to the WordPress dir name.
-	 *
-	 * @param  array $result
-	 * @return array
-	 */
-	/*public function post_install( $response, $hook_extra, $result ) {
-		global $wp_filesystem;
-
-		$this->item_path = substr( $this->item_file, 0, strrpos( $this->item_file, '/' ) );
-		$wp_filesystem->move( $result[ 'destination' ], $this->item_path );
-		$result[ 'destination' ] = $this->item_path;
-
-		// get any submodules that may be part of the item
-		$gitmodules_file = $this->item_path . '/.gitmodules';
-		if ( file_exists( $gitmodules_file ) && $modules = parse_ini_file( $gitmodules_file, true ) ) {
-			$this->get_modules( $modules );
-		}
-
-		// clear stored info so it won't still contain the old version
-		update_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WordPress_GitHub_Updater', '' );
-
-		return $result;
-	}*/
 
 	/**
 	 * Stores the package locally and renames the dir inside the zipball: FROM "the GitHub release identifier" TO "the plugin folder name".
@@ -220,11 +195,18 @@ class Pallazzio_WordPress_GitHub_Updater {
 		$wp_filesystem->mkdir( $destination );
 		unzip_file( $temp_filename, $destination );
 		$dirs = glob( $destination . '/*', GLOB_ONLYDIR );
+		$temp_dirname = '';
 		foreach ( $dirs as $dir ) {
 			if ( false !== strpos( $dir, $github_user . '-' . $github_repo ) ) {
 				$temp_dirname = $dir;
+				break;
 			}
 		}
+
+		/*$gitmodules_file = $destination . '/.gitmodules';
+		if ( file_exists( $gitmodules_file ) && $modules = parse_ini_file( $gitmodules_file, true ) ) {
+			$this->get_modules( $modules, $temp_dirname . '/' );
+		}*/
 
 		$zip = new ZipArchive();
 		$zip->open( $this->item_path . '/' . $this->github_repo . '.zip', ZipArchive::CREATE | ZipArchive::OVERWRITE );
@@ -245,7 +227,7 @@ class Pallazzio_WordPress_GitHub_Updater {
 		$zip->close();
 
 		$options[ 'package' ] = get_template_directory_uri() . '/' . $this->github_repo . '.zip';
-
+		die();
 		return $options;
 	}
 
@@ -295,6 +277,31 @@ class Pallazzio_WordPress_GitHub_Updater {
 				$this->get_modules( $modules, $module[ 'path' ] );
 			}
 		}
+	}
+
+	/**
+	 * Modifies the internal location pointer and moves the files from the GitHub dir name to the WordPress dir name.
+	 *
+	 * @param  array $result
+	 * @return array
+	 */
+	public function post_install( $response, $hook_extra, $result ) {
+		global $wp_filesystem;
+
+		$this->item_path = substr( $this->item_file, 0, strrpos( $this->item_file, '/' ) );
+		//$wp_filesystem->move( $result[ 'destination' ], $this->item_path );
+		//$result[ 'destination' ] = $this->item_path;
+
+		// get any submodules that may be part of the item
+		$gitmodules_file = $this->item_path . '/.gitmodules';
+		if ( file_exists( $gitmodules_file ) && $modules = parse_ini_file( $gitmodules_file, true ) ) {
+			$this->get_modules( $modules );
+		}
+
+		// clear stored info so it won't still contain the old version
+		update_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WPGHU', '' );
+
+		return $result;
 	}
 
 }

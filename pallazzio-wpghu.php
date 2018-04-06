@@ -20,7 +20,7 @@ class Pallazzio_WPGHU {
 	private $item_path       = null; // string e.g. '/home/user/public_html/wp-content/[plugins],[themes]/item-dir'
 	private $item_file       = null; // string e.g. '/home/user/public_html/wp-content/[plugins],[themes]/item-dir/item-file.php'
 	private $item_data       = null; // array  Info about currently installed version.
-	private $item_active     = null; // bool
+	private $plugin_active   = null; // bool
 
 	/**
 	 * Class constructor.
@@ -50,43 +50,6 @@ class Pallazzio_WPGHU {
 
 		add_filter( 'upgrader_package_options', array( $this, 'modify_package' ), 10, 1 );
 		add_filter( 'upgrader_post_install',    array( $this, 'post_install' ),   10, 3 );
-	}
-
-	/**
-	 * Queries the GitHub API for information about the latest release.
-	 *
-	 * @param  string $github_user
-	 * @param  string $github_repo
-	 * @param  string $access_token Optional.
-	 * @return object $github_response
-	 */
-	private function github_api_fetch( $github_user, $github_repo, $access_token = null ) {
-		$url = 'https://api.github.com/repos/' . $github_user . '/' . $github_repo . '/releases';
-
-		$url = ! empty( $access_token ) ? add_query_arg( array( 'access_token' => $access_token ), $url ) : $url;
-
-		$github_response = json_decode( wp_remote_retrieve_body( wp_remote_get( $url ) ) );
-
-		$github_response = is_array( $github_response ) ? current( $github_response ) : $github_response;
-
-		$matches = null;
-		preg_match( '/tested:\s([\d\.]+)/i', $github_response->body, $matches );
-		if ( is_array( $matches ) && count( $matches ) > 1 ) {
-			$github_response->tested = $matches[ 1 ];
-		}
-
-		return $github_response;
-	}
-
-	/**
-	 * Displays item info in the 'View Details' popup.
-	 *
-	 * @param  object $result
-	 * @return object
-	 */
-	public function item_info( $result, $action = null, $args = null ) {
-		// TODO: add item info for 'View Details' popup
-		return $result;
 	}
 
 	/**
@@ -166,15 +129,6 @@ class Pallazzio_WPGHU {
 	}
 
 	/**
-	 * Registers the state of the item before updating so that it can be set to the same state afterwards.
-	 *
-	 * @return null
-	 */
-	public function pre_install( $true, $args ) {
-		$this->item_active = is_plugin_active( $this->item );
-	}
-
-	/**
 	 * Stores the package locally and renames the dir inside the zipball: FROM "the GitHub release identifier" TO "the plugin folder name".
 	 *
 	 * @param  array $options
@@ -227,8 +181,83 @@ class Pallazzio_WPGHU {
 		$zip->close();
 
 		$options[ 'package' ] = get_template_directory_uri() . '/' . $this->github_repo . '.zip';
-		//die();
+
 		return $options;
+	}
+
+	/**
+	 * Displays item info in the 'View Details' popup.
+	 *
+	 * @param  object $result
+	 * @return object
+	 */
+	public function item_info( $result, $action = null, $args = null ) {
+		// TODO: add item info for 'View Details' popup
+		return $result;
+	}
+
+	/**
+	 * Registers the state of the item before updating so that it can be set to the same state afterwards.
+	 *
+	 * @return null
+	 */
+	public function pre_install( $true, $args ) {
+		$this->plugin_active = is_plugin_active( $this->item );
+	}
+
+	/**
+	 * Modifies the internal location pointer and moves the files from the GitHub dir name to the WordPress dir name.
+	 *
+	 * @param  array $result
+	 * @return array
+	 */
+	public function post_install( $response, $hook_extra, $result ) {
+		global $wp_filesystem;
+
+		$this->item_path = substr( $this->item_file, 0, strrpos( $this->item_file, '/' ) );
+		//$wp_filesystem->move( $result[ 'destination' ], $this->item_path );
+		//$result[ 'destination' ] = $this->item_path;
+
+		// get any submodules that may be part of the item
+		$gitmodules_file = $this->item_path . '/.gitmodules';
+		if ( file_exists( $gitmodules_file ) && $modules = parse_ini_file( $gitmodules_file, true ) ) {
+			$this->get_modules( $modules );
+		}
+
+		// clear stored info so it won't still contain the old version
+		update_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WPGHU', '' );
+
+		if ( ! $this->is_theme && $this->plugin_active ) {
+			activate_plugin( $this->item_file );
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Queries the GitHub API for information about the latest release.
+	 *
+	 * @param  string $github_user
+	 * @param  string $github_repo
+	 * @param  string $access_token Optional.
+	 * @return object $github_response
+	 */
+	private function github_api_fetch( $github_user, $github_repo, $access_token = null ) {
+		$url = 'https://api.github.com/repos/' . $github_user . '/' . $github_repo . '/releases';
+
+		$url = ! empty( $access_token ) ? add_query_arg( array( 'access_token' => $access_token ), $url ) : $url;
+
+		$github_response = json_decode( wp_remote_retrieve_body( wp_remote_get( $url ) ) );
+
+		$github_response = is_array( $github_response ) ? current( $github_response ) : $github_response;
+
+		$matches = null;
+		preg_match( '/tested:\s([\d\.]+)/i', $github_response->body, $matches );
+		if ( is_array( $matches ) && count( $matches ) > 1 ) {
+			$github_response->tested = $matches[ 1 ];
+		}
+
+		return $github_response;
 	}
 
 	/**
@@ -277,31 +306,6 @@ class Pallazzio_WPGHU {
 				$this->get_modules( $modules, $module[ 'path' ] );
 			}
 		}
-	}
-
-	/**
-	 * Modifies the internal location pointer and moves the files from the GitHub dir name to the WordPress dir name.
-	 *
-	 * @param  array $result
-	 * @return array
-	 */
-	public function post_install( $response, $hook_extra, $result ) {
-		global $wp_filesystem;
-
-		$this->item_path = substr( $this->item_file, 0, strrpos( $this->item_file, '/' ) );
-		//$wp_filesystem->move( $result[ 'destination' ], $this->item_path );
-		//$result[ 'destination' ] = $this->item_path;
-
-		// get any submodules that may be part of the item
-		$gitmodules_file = $this->item_path . '/.gitmodules';
-		if ( file_exists( $gitmodules_file ) && $modules = parse_ini_file( $gitmodules_file, true ) ) {
-			$this->get_modules( $modules );
-		}
-
-		// clear stored info so it won't still contain the old version
-		update_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WPGHU', '' );
-
-		return $result;
 	}
 
 }

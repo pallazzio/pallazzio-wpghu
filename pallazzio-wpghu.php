@@ -20,7 +20,6 @@ class Pallazzio_WPGHU {
 	private $item_path       = '';      // str    e.g. '/home/user/public_html/wp-content/[plugins],[themes]/item-dir'
 	private $item_file       = '';      // str    e.g. '/home/user/public_html/wp-content/[plugins],[themes]/item-dir/item-file.php'
 	private $item_data       = array(); // array  Info about currently installed version.
-	private $plugin_active   = false;   // bool
 
 	/**
 	 * Class constructor.
@@ -45,7 +44,6 @@ class Pallazzio_WPGHU {
 		} else {
 			add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'modify_transient' ), 10, 1 );
 			add_filter( 'plugins_api',                           array( $this, 'item_info' ),        10, 3 );
-			add_filter( 'upgrader_pre_install',                  array( $this, 'pre_install'  ),     10, 2 );
 		}
 
 		add_filter( 'upgrader_package_options', array( $this, 'modify_package' ), 10, 1 );
@@ -180,7 +178,8 @@ class Pallazzio_WPGHU {
 
 		$zip->close();
 
-		$options[ 'package' ] = get_template_directory_uri() . '/' . $this->github_repo . '.zip';
+		$base = $this->is_theme ? get_template_directory_uri() : plugins_url( '', $this->item_file );
+		$options[ 'package' ] = $base . '/' . $this->github_repo . '.zip';
 
 		return $options;
 	}
@@ -194,15 +193,6 @@ class Pallazzio_WPGHU {
 	public function item_info( $result, $action, $args ) {
 		// TODO: add item info for 'View Details' popup
 		return $result;
-	}
-
-	/**
-	 * Registers the state of the item before updating so that it can be set to the same state afterwards.
-	 *
-	 * @return null
-	 */
-	public function pre_install( $true, $args ) {
-		$this->plugin_active = is_plugin_active( $this->item );
 	}
 
 	/**
@@ -296,15 +286,33 @@ class Pallazzio_WPGHU {
 			foreach ( $dirs as $dir ) {
 				if ( false !== strpos( $dir, $github_user . '-' . $github_repo ) ) {
 					$wp_filesystem->move( $dir, $destination . '/' . $github_repo, true );
+					$wp_filesystem->delete( $dir, true );
 				}
 			}
 
-			// yo dawg, I heard you like submodules, so I submoduled some submodules into your submodule so you can submodule while you submodule
+			// Yo Dawg! I heard you like submodules, so I submoduled some submodules into your submodule so you can submodule while you submodule
 			// recurse if the submodule has submodules of its own
 			$gitmodules_file = $this->item_path . '/' . $module[ 'path' ] . '/.gitmodules';
 			if ( file_exists( $gitmodules_file ) && $modules = parse_ini_file( $gitmodules_file, true ) ) {
 				$this->get_modules( $modules, $module[ 'path' ] );
 			}
+		}
+	}
+
+	/**
+	 * Writes to error_log.
+	 *
+	 * @param mixed  $log
+	 * @param string $id
+	 *
+	 * @return void
+	 */
+	public function write_log( $log, $id = '' ) {
+		error_log( '************* ' . $id . ' *************' );
+		if ( is_array( $log ) || is_object( $log ) ) {
+			error_log( print_r( $log, true ) );
+		} else {
+			error_log( $log );
 		}
 	}
 

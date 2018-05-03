@@ -133,8 +133,8 @@ class Pallazzio_WPGHU {
 	 * @return array $options
 	 */
 	public function modify_package( $options ) {
-		$this->write_log( $options, 'package options' );
-		if ( false ) return $options;
+		//$this->write_log( $options, 'package options' );
+		if ( $this->item !== $options[ 'hook_extra' ][ 'plugin' ] ) return $options;
 
 		global $wp_filesystem;
 

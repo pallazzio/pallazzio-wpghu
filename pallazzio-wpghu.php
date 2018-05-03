@@ -133,6 +133,9 @@ class Pallazzio_WPGHU {
 	 * @return array $options
 	 */
 	public function modify_package( $options ) {
+		$this->write_log( $options, 'package options' );
+		if ( false ) return $options;
+
 		global $wp_filesystem;
 
 		$this->item_path = substr( $this->item_file, 0, strrpos( $this->item_file, '/' ) ); // no trailing slash

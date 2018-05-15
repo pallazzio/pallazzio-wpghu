@@ -126,7 +126,8 @@ class Pallazzio_WPGHU {
 	 */
 	public function post_install( $response, $hook_extra, $result ) {
 		global $wp_filesystem;
-
+		
+		$this->plugin_path = substr( $this->plugin_file, 0, strrpos( $this->plugin_file, '/' ) ); // no trailing slash
 		$wp_filesystem->move( $result[ 'destination' ], $this->plugin_path );
 		$result[ 'destination' ] = $this->plugin_path;
 		activate_plugin( $this->plugin_file );

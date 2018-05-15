@@ -1,6 +1,6 @@
 <?php
 /**
- * Allows WordPress plugins and themes hosted on GitHub to be updated automatically.
+ * Allows WordPress plugins hosted on GitHub to be updated automatically.
  *
  * @link https://github.com/pallazzio/pallazzio-wpghu/
  */
@@ -11,47 +11,38 @@ if ( ! defined( 'WPINC' ) ) die();
 if ( ! class_exists( 'Pallazzio_WPGHU' ) ) :
 
 class Pallazzio_WPGHU {
-	private $is_theme        = false;   // bool
 	private $github_user     = '';      // str    e.g. 'pallazzio'
-	private $github_repo     = '';      // str    e.g. 'item-dir'
+	private $github_repo     = '';      // str    e.g. 'plugin-dir'
 	private $github_response = null;    // object Info about new version from GitHub.
 	private $access_token    = '';      // str    Optional. For private GitHub repo.
-	private $item            = '';      // str    e.g. 'item-dir/item-file.php'
-	private $item_path       = '';      // str    e.g. '/home/user/public_html/wp-content/[plugins],[themes]/item-dir'
-	private $item_file       = '';      // str    e.g. '/home/user/public_html/wp-content/[plugins],[themes]/item-dir/item-file.php'
-	private $item_data       = array(); // array  Info about currently installed version.
+	private $plugin          = '';      // str    e.g. 'plugin-dir/plugin-file.php'
+	private $plugin_path     = '';      // str    e.g. '/home/user/public_html/wp-content/plugins/plugin-dir'
+	private $plugin_file     = '';      // str    e.g. '/home/user/public_html/wp-content/plugins/plugin-dir/plugin-file.php'
+	private $plugin_data     = array(); // array  Info about currently installed version.
 
 	/**
 	 * Class constructor.
 	 *
-	 * @param str $item_file
+	 * @param str $plugin_file
 	 * @param str $github_user
 	 * @param str $access_token Optional.
 	 */
-	function __construct( $item_file, $github_user, $access_token = '' ) {
-		$item_r             = explode( '/', $item_file );
-		$item_r_count       = count( $item_r );
-		$this->is_theme     = $item_r[ $item_r_count - 3 ] === 'themes' ? true : false;
+	function __construct( $plugin_file, $github_user, $access_token = '' ) {
+		$plugin_r           = explode( '/', $plugin_file );
+		$plugin_r_count     = count( $plugin_r );
 		$this->github_user  = $github_user;
-		$this->github_repo  = $item_r[ $item_r_count - 2 ];
+		$this->github_repo  = $plugin_r[ $plugin_r_count - 2 ];
 		$this->access_token = $access_token;
-		$this->item         = $this->github_repo . '/' . $item_r[ $item_r_count - 1 ];
-		$this->item_file    = $item_file;
+		$this->plugin       = $this->github_repo . '/' . $plugin_r[ $plugin_r_count - 1 ];
+		$this->plugin_file  = $plugin_file;
 
-		if ( $this->is_theme ) {
-			add_filter( 'pre_set_site_transient_update_themes',  array( $this, 'modify_transient' ), 10, 1 );
-			add_filter( 'themes_api',                            array( $this, 'item_info' ),        10, 3 );
-		} else {
-			add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'modify_transient' ), 10, 1 );
-			add_filter( 'plugins_api',                           array( $this, 'item_info' ),        10, 3 );
-		}
-
-		add_filter( 'upgrader_package_options', array( $this, 'modify_package' ), 10, 1 );
-		add_filter( 'upgrader_post_install',    array( $this, 'post_install' ),   10, 3 );
+		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'modify_transient' ), 10, 1 );
+		add_filter( 'plugins_api',                           array( $this, 'plugin_info' ),      10, 3 );
+		add_filter( 'upgrader_post_install',                 array( $this, 'post_install' ),     10, 3 );
 	}
 
 	/**
-	 * Adds info to the item update transient.
+	 * Adds info to the plugin update transient.
 	 *
 	 * @param object $transient
 	 *
@@ -59,7 +50,7 @@ class Pallazzio_WPGHU {
 	 */
 	public function modify_transient( $transient ) {
 		// if it was already set, don't do it again ( because this function can be called multiple times during a sigle page load )
-		if ( isset( $transient->response[ $this->item ] ) || isset( $transient->response[ $this->github_repo ] ) ) return $transient;
+		if ( isset( $transient->response[ $this->plugin ] ) /*|| isset( $transient->response[ $this->github_repo ] )*/ ) return $transient;
 
 		$last_github_call_time = get_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WPGHU_Time' );
 
@@ -69,16 +60,12 @@ class Pallazzio_WPGHU {
 
 			if ( ! empty( $stored ) ) {
 
-				if ( $this->is_theme ) {
-					$transient->response[ $this->github_repo ] = json_decode( $stored, true );
-				} else {
-					$transient->response[ $this->item ] = json_decode( $stored );
-				}
+				$transient->response[ $this->plugin ] = json_decode( $stored );
 
 			} else {
 				
-				unset( $transient->response[ $this->item ] );
-				unset( $transient->response[ $this->github_repo ] );
+				unset( $transient->response[ $this->plugin ] );
+				//unset( $transient->response[ $this->github_repo ] );
 
 			}
 
@@ -86,12 +73,12 @@ class Pallazzio_WPGHU {
 
 		}
 
-		$this->item_data       = $this->is_theme ? wp_get_theme( $this->github_repo ) : get_plugin_data( $this->item_file );
+		$this->plugin_data     = get_plugin_data( $this->plugin_file );
 		$this->github_response = empty( $this->github_response ) ? $this->github_api_fetch( $this->github_user, $this->github_repo, $this->access_token ) : null;
 
 		update_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WPGHU_Time', time() );
 
-		$version = $this->is_theme ? $this->item_data->get( 'Version' ) : $this->item_data[ 'Version' ];
+		$version = $this->plugin_data[ 'Version' ];
 		if ( 1 !== version_compare( $this->github_response->tag_name, $version ) ) {
 
 			// clear stored info because it may still contain the old version
@@ -100,24 +87,17 @@ class Pallazzio_WPGHU {
 
 		}
 
-		$r = array();
-		$r[ 'new_version' ] = $this->github_response->tag_name;
-		$r[ 'package' ]     = $this->github_response->zipball_url;
-		$r[ 'url' ]         = $this->is_theme ? $this->item_data->get( 'ThemeURI' ) : $this->item_data[ 'PluginURI' ];
+		$r = array(
+			'new_version' => $this->github_response->tag_name;
+			'package'     => $this->github_response->zipball_url;
+			'url'         => $this->plugin_data[ 'PluginURI' ];
+			'slug'        => $this->github_repo;
+			'plugin'      => $this->plugin;
+			'tested'      => isset( $this->github_response->tested ) ? $this->github_response->tested : '';
+		);
 
-		if ( $this->is_theme ) {
-			$r[ 'theme' ]  = $this->github_repo;
-
-			// add this theme to the site transient
-			$transient->response[ $this->github_repo ] = $r;
-		} else {
-			$r[ 'slug' ]   = $this->github_repo;
-			$r[ 'plugin' ] = $this->item;
-			$r[ 'tested' ] = isset( $this->github_response->tested ) ? $this->github_response->tested : '';
-
-			// add this plugin to the site transient
-			$transient->response[ $this->item ] = (object) $r;
-		}
+		// add this plugin to the site transient
+		$transient->response[ $this->plugin ] = (object) $r;
 
 		// store this transient object locally so it can be used again without calling GitHub
 		update_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WPGHU', wp_json_encode( $r ) );
@@ -126,72 +106,14 @@ class Pallazzio_WPGHU {
 	}
 
 	/**
-	 * Stores the package locally and renames the dir inside the zipball: FROM "the GitHub release identifier" TO "the plugin folder name".
-	 *
-	 * @param array $options
-	 *
-	 * @return array $options
-	 */
-	public function modify_package( $options ) {
-		//$this->write_log( $options, 'package options' );
-		if ( $this->item !== $options[ 'hook_extra' ][ 'plugin' ] ) return $options;
-
-		global $wp_filesystem;
-
-		$this->item_path = substr( $this->item_file, 0, strrpos( $this->item_file, '/' ) ); // no trailing slash
-		$destination     = $this->item_path . '/package-temp-' . time();
-		$temp_filename   = $destination . '.zip';
-
-		wp_remote_get( $options[ 'package' ], array(
-			'stream'   => true,
-			'filename' => $temp_filename,
-		) );
-
-		$wp_filesystem->mkdir( $destination );
-		unzip_file( $temp_filename, $destination );
-
-		$dirs = glob( $destination . '/*', GLOB_ONLYDIR );
-		$temp_dirname = '';
-		foreach ( $dirs as $dir ) {
-			if ( false !== strpos( $dir, $github_user . '-' . $github_repo ) ) {
-				$temp_dirname = $dir;
-				break;
-			}
-		}
-
-		$zip = new ZipArchive();
-		$zip->open( $this->item_path . '/' . $this->github_repo . '.zip', ZipArchive::CREATE | ZipArchive::OVERWRITE );
-
-		$files = new RecursiveIteratorIterator(
-			new RecursiveDirectoryIterator( $temp_dirname ), RecursiveIteratorIterator::LEAVES_ONLY
-		);
-
-		foreach ( $files as $file ) {
-			if ( ! $file->isDir() ) {
-				$filePath     = $file->getRealPath();
-				$relativePath = $this->github_repo . '/' . substr( $filePath, strlen( $temp_dirname ) + 1 );
-
-				$zip->addFile( $filePath, $relativePath );
-			}
-		}
-
-		$zip->close();
-
-		$base = $this->is_theme ? get_template_directory_uri() : plugins_url( '', $this->item_file );
-		$options[ 'package' ] = $base . '/' . $this->github_repo . '.zip';
-
-		return $options;
-	}
-
-	/**
-	 * Displays item info in the 'View Details' popup.
+	 * Displays plugin info in the 'View Details' popup.
 	 *
 	 * @param object $result
 	 *
 	 * @return object $result
 	 */
-	public function item_info( $result, $action, $args ) {
-		// TODO: add item info for 'View Details' popup
+	public function plugin_info( $result, $action, $args ) {
+		// TODO: add plugin info for 'View Details' popup
 		return $result;
 	}
 
@@ -203,7 +125,13 @@ class Pallazzio_WPGHU {
 	 * @return array $result
 	 */
 	public function post_install( $response, $hook_extra, $result ) {
-		$gitmodules_file = $this->item_path . '/.gitmodules';
+		global $wp_filesystem;
+
+		$wp_filesystem->move( $result[ 'destination' ], $this->plugin_path );
+		$result[ 'destination' ] = $this->plugin_path;
+		activate_plugin( $this->plugin_file );
+
+		$gitmodules_file = $this->plugin_path . '/.gitmodules';
 		if ( file_exists( $gitmodules_file ) && $modules = parse_ini_file( $gitmodules_file, true ) ) {
 			$this->get_modules( $modules );
 		}
@@ -259,7 +187,7 @@ class Pallazzio_WPGHU {
 
 			$github_response = $this->github_api_fetch( $github_user, $github_repo );
 
-			$temp_filename = $this->item_path . '/' . $github_repo . '.zip';
+			$temp_filename = $this->plugin_path . '/' . $github_repo . '.zip';
 
 			wp_remote_get( $github_response->zipball_url, array(
 				'stream'   => true,
@@ -270,7 +198,7 @@ class Pallazzio_WPGHU {
 			$module[ 'path' ] = ! empty ( $module_path ) ? $module_path . '/' . $module[ 'path' ] : $module[ 'path' ];
 
 			// unzip and rename dir
-			$destination = $this->item_path . '/' . substr( $module[ 'path' ], 0, strrpos( $module[ 'path' ], '/' ) ); // no trailing slash
+			$destination = $this->plugin_path . '/' . substr( $module[ 'path' ], 0, strrpos( $module[ 'path' ], '/' ) ); // no trailing slash
 			unzip_file( $temp_filename, $destination );
 			$wp_filesystem->delete( $temp_filename );
 			$dirs = glob( $destination . '/*', GLOB_ONLYDIR );
@@ -283,7 +211,7 @@ class Pallazzio_WPGHU {
 
 			// Yo Dawg! I heard you like submodules, so I submoduled some submodules into your submodule so you can submodule while you submodule
 			// recurse if the submodule has submodules of its own
-			$gitmodules_file = $this->item_path . '/' . $module[ 'path' ] . '/.gitmodules';
+			$gitmodules_file = $this->plugin_path . '/' . $module[ 'path' ] . '/.gitmodules';
 			if ( file_exists( $gitmodules_file ) && $modules = parse_ini_file( $gitmodules_file, true ) ) {
 				$this->get_modules( $modules, $module[ 'path' ] );
 			}

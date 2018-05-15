@@ -88,12 +88,12 @@ class Pallazzio_WPGHU {
 		}
 
 		$r = array(
-			'new_version' => $this->github_response->tag_name;
-			'package'     => $this->github_response->zipball_url;
-			'url'         => $this->plugin_data[ 'PluginURI' ];
-			'slug'        => $this->github_repo;
-			'plugin'      => $this->plugin;
-			'tested'      => isset( $this->github_response->tested ) ? $this->github_response->tested : '';
+			'new_version' => $this->github_response->tag_name,
+			'package'     => $this->github_response->zipball_url,
+			'url'         => $this->plugin_data[ 'PluginURI' ],
+			'slug'        => $this->github_repo,
+			'plugin'      => $this->plugin,
+			'tested'      => isset( $this->github_response->tested ) ? $this->github_response->tested : '',
 		);
 
 		// add this plugin to the site transient

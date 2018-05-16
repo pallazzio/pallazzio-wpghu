@@ -54,7 +54,7 @@ class Pallazzio_WPGHU {
 
 		$last_github_call_time = get_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WPGHU_Time' );
 
-		if ( $last_github_call_time && time() - $last_github_call_time < /*60 * 60 * */6 ) { // don't call github more than once every six hours
+		if ( $last_github_call_time && time() - $last_github_call_time < 60 * 60 * 6 ) { // don't call github more than once every six hours
 
 			$stored = get_option( $this->github_user . '_' . $this->github_repo . '_Pallazzio_WPGHU' );
 
